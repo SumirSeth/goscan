@@ -18,9 +18,6 @@ func main() {
 		Long:  "goscan: A fast, concurrent TCP port scanner for IPs/CIDRs. Identifies open ports and analyzes HTTP/S services (status, headers, title), with JSON/CSV output.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var ip = cmd.Flags().Lookup("ip").Value.String()
-			if ip == "" {
-				return cmd.Help()
-			}
 			var ports = cmd.Flags().Lookup("ports").Value.String()
 			
 
