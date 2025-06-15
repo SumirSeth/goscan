@@ -1,11 +1,85 @@
 package main
 
 import (
-  	"fmt"
-  	"os"
+	"fmt"
+	"net"
+	"os"
+	"strconv"
+	"strings"
+	"sync"
 
-  	"github.com/spf13/cobra"
+	"github.com/spf13/cobra"
 )
+
+func ExpandCIDR(cidr string) ([]string, error) {
+	ip, ipnet, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return nil, err
+	}
+	var ips []string
+	for ip := ip.Mask(ipnet.Mask); ipnet.Contains(ip); incIP(ip) {
+		ips = append(ips, ip.String())
+	}
+	// Remove network and broadcast addresses if needed
+	if len(ips) > 2 {
+		return ips[1 : len(ips)-1], nil
+	}
+	return ips, nil
+}
+
+func ExpandPorts(ports string) ([]string, error) {
+	var result []string
+	items := strings.Split(ports, ",")
+
+	for _, item := range items {
+		if strings.Contains(item, "-") {
+			parts := strings.Split(item, "-")
+			start, err1 := strconv.Atoi(parts[0])
+			end, err2 := strconv.Atoi(parts[1])
+			if err1 != nil || err2 != nil || start > end {
+				return nil, fmt.Errorf("invalid port range: %s", item)
+			}
+			for p := start; p <= end; p++ {
+				result = append(result, strconv.Itoa(p))
+			}
+		} else {
+			result = append(result, item)
+		}
+	}
+	return result, nil
+}
+
+
+// Helper function to increment an IP address
+func incIP(ip net.IP) {
+	for j := len(ip) - 1; j >= 0; j-- {
+		ip[j]++
+		if ip[j] > 0 {
+			break
+		}
+	}
+}
+
+func scanPorts(ips []string, ports string) {
+	portList, err := ExpandPorts(ports)
+	if err != nil {
+		fmt.Println("Port parse error:", err)
+		return
+	}
+
+	var wg sync.WaitGroup
+	for _, ip := range ips {
+		for _, port := range portList {
+			wg.Add(1)
+			go func(ip, port string) {
+				defer wg.Done()
+				fmt.Printf("Scanning %s:%s\n", ip, port)
+			}(ip, port)
+		}
+	}
+	wg.Wait()
+}
+
 
 func main() {
 	// go run main.go -ip 192.168.1.0/30 -ports 22,80,443,8000-8002
@@ -17,12 +91,21 @@ func main() {
 		Short: "A fast, concurrent TCP port scanner and HTTP service mapper.",
 		Long:  "goscan: A fast, concurrent TCP port scanner for IPs/CIDRs. Identifies open ports and analyzes HTTP/S services (status, headers, title), with JSON/CSV output.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			var ip = cmd.Flags().Lookup("ip").Value.String()
-			var ports = cmd.Flags().Lookup("ports").Value.String()
-			
+			ip, err := cmd.Flags().GetString("ip")
+			if err != nil {
+				return err
+			}
+			ports, err := cmd.Flags().GetString("ports")
+			if err != nil {
+				return err
+			}
 
-			fmt.Println("IP:", ip)
-			fmt.Println("Ports:", ports)
+			ips, err := ExpandCIDR(ip)
+			if err != nil {
+				return err
+			}
+
+			scanPorts(ips, ports)
 
 			return nil
 		},

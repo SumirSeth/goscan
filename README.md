@@ -31,3 +31,15 @@ Pull requests are welcome. For major changes, please open an issue first to disc
 Please make sure to update tests as appropriate.
 
 ## License
+
+[MIT](https://choosealicense.com/licenses/mit/)
+
+---
+
+# TODO:
+
+## Minor Omptimization
+- For slightly better memory safety in the future, clone IPs before storing them in a slice:
+    ```go
+    ips = append(ips, append(net.IP(nil), ip...).String())
+    ```
